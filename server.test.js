@@ -77,6 +77,40 @@ function getSampleRecommendation() {
   };
 }
 
+test("createRecommendation sends a specificity-focused Gemini prompt", async () => {
+  process.env.GEMINI_API_KEY = "test-api-key";
+
+  let prompt = "";
+  let generationConfig = {};
+
+  const result = await createRecommendation({
+    teamName: "Calm Room Team",
+    target: "students who need a calmer study space",
+    problem: "stress in study rooms",
+    technology: "AI floor-plan generation",
+    majors: ["computer science", "architecture", "psychology"]
+  }, {
+    fetchImpl: async (_url, options) => {
+      const requestBody = JSON.parse(options.body);
+      prompt = requestBody.contents[0].parts[0].text;
+      generationConfig = requestBody.generationConfig;
+
+      return createSuccessResponse(getSampleRecommendation());
+    },
+    waitImpl: async () => {}
+  });
+
+  assert.equal(result.topicTitle, "Adaptive Study Space Planner");
+  assert.match(prompt, /one narrow, named research topic/);
+  assert.match(prompt, /topicTitle must combine the user's target, problem, technology or method/);
+  assert.match(prompt, /Avoid titles like/);
+  assert.match(prompt, /Audience\/context used: students who need a calmer study space/);
+  assert.match(prompt, /Problem used: stress in study rooms/);
+  assert.match(prompt, /Technology\/method used: AI floor-plan generation/);
+  assert.equal(generationConfig.temperature, 0.35);
+  assert.equal(generationConfig.topP, 0.8);
+});
+
 test("createRecommendation retries a transient Gemini 503 response", async () => {
   process.env.GEMINI_API_KEY = "test-api-key";
 

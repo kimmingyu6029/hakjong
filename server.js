@@ -144,9 +144,13 @@ function sanitizePathname(pathname) {
 
 function buildPrompt(data) {
   const majors = Array.isArray(data.majors) ? data.majors.filter(Boolean) : [];
+  const target = data.target || "general users";
+  const problem = data.problem || "a real-life problem or inconvenience";
+  const technology = data.technology || "AI and data analysis";
 
   return [
     "You are an expert at designing interdisciplinary high-school research projects for student records.",
+    "Your main job is to turn the user's exact inputs into one narrow, named research topic.",
     "Consider multiple intended majors together and recommend one practical, strong, portfolio-friendly research activity.",
     "Return the final answer in Korean.",
     "Return only valid JSON with no markdown code fences.",
@@ -162,19 +166,30 @@ function buildPrompt(data) {
     "",
     "Input:",
     `Team name: ${data.teamName || "Our Team"}`,
-    `Target users or audience: ${data.target || "general users"}`,
-    `Problem to solve: ${data.problem || "a real-life problem or inconvenience"}`,
-    `Technology or method: ${data.technology || "AI and data analysis"}`,
+    `Target users or audience: ${target}`,
+    `Problem to solve: ${problem}`,
+    `Technology or method: ${technology}`,
     `Intended majors: ${majors.join(", ") || "none provided"}`,
     "",
     "Requirements:",
-    "1. topicTitle must sound concrete and specific.",
-    "2. topicSummary should be brief and clear.",
-    "3. recordText should read naturally like a school activity or portfolio sentence.",
-    "4. questions and activities must each contain exactly 4 items.",
-    "5. aiPrompt should be a detailed follow-up prompt another AI can expand.",
-    "6. Show a clear connection between the majors and suggest a realistic output or prototype.",
-    "7. If the majors include computer science, architecture, and psychology, prioritize an AI-based space or floor-plan generation project that improves users' psychological comfort."
+    "1. topicTitle must combine the user's target, problem, technology or method, and a concrete expected output or measurement.",
+    "2. topicTitle must not be a broad field, slogan, or category. Avoid titles like \"AI-based education research\", \"environmental problem solving\", \"student stress improvement\", or \"interdisciplinary project\".",
+    "3. If the input is vague, narrow it to a school-scale context by choosing a specific user group, place or situation, measurable variable, and prototype format.",
+    "4. topicTitle should be concrete enough that a student can start planning activities from the title alone.",
+    "5. topicSummary should be one clear sentence that states who it is for, what problem is addressed, what method is used, and what output will be produced.",
+    "6. recordText should read naturally like a school activity or portfolio sentence.",
+    "7. questions and activities must each contain exactly 4 items.",
+    "8. aiPrompt should be a detailed follow-up prompt another AI can expand.",
+    "9. Show a clear connection between the majors and suggest a realistic output or prototype.",
+    "10. If the majors include computer science, architecture, and psychology, prioritize an AI-based space or floor-plan generation project that improves users' psychological comfort.",
+    "",
+    "Specificity checklist before answering:",
+    `- Audience/context used: ${target}`,
+    `- Problem used: ${problem}`,
+    `- Technology/method used: ${technology}`,
+    `- Major perspectives used: ${majors.join(", ") || "none provided"}`,
+    "- The topic names a tangible output such as a prototype, model, survey tool, dashboard, design guide, experiment, or dataset.",
+    "- The topic includes a measurable outcome such as stress, satisfaction, waiting time, accuracy, accessibility, comfort, safety, or efficiency."
   ].join("\n");
 }
 
@@ -235,6 +250,8 @@ async function createRecommendation(
       }
     ],
     generationConfig: {
+      temperature: 0.35,
+      topP: 0.8,
       responseMimeType: "application/json",
       responseJsonSchema: {
         type: "object",
