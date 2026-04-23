@@ -323,6 +323,16 @@ textarea {
   margin-bottom: 12px;
 }
 
+.result-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.result-actions .secondary-button {
+  flex: 1 1 160px;
+}
+
 @media (max-width: 900px) {
   .layout {
     grid-template-columns: 1fr;
@@ -351,5 +361,9 @@ textarea {
   .remove-button {
     width: 100%;
     min-height: 44px;
+  }
+
+  .result-actions .secondary-button {
+    width: 100%;
   }
 }

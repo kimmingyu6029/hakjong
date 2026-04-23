@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>융합 탐구 주제 추천기</title>
+  <title>통합 연구 주제 추천기</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=SUIT:wght@400;500;700;800&display=swap" rel="stylesheet">
@@ -12,11 +12,11 @@
 <body>
   <div class="page-shell">
     <header class="hero">
-      <p class="eyebrow">학생부 종합전형용</p>
-      <h1>여러 전공을 연결해<br>탐구 활동 주제를 추천해보세요</h1>
+      <p class="eyebrow">학생부 종합형 추천 도구</p>
+      <h1>여러 전공을 연결한<br>연구 활동 주제를 추천해드려요</h1>
       <p class="hero-copy">
-        팀원들의 희망 전공을 함께 입력하면, 전공 간 공통 문제를 찾고 학생부에 활용하기 좋은
-        융합형 탐구 주제를 추천합니다.
+        팀원들의 희망 전공과 해결하고 싶은 문제를 입력하면, 전공 간 공통 지점을 찾아
+        학생부와 포트폴리오에 활용하기 좋은 통합형 연구 주제를 추천합니다.
       </p>
     </header>
 
@@ -24,18 +24,18 @@
       <section class="panel form-panel">
         <div class="section-title">
           <h2>입력 정보</h2>
-          <p>팀 프로젝트 상황에 맞게 전공과 관심 키워드를 적어주세요.</p>
+          <p>우리 프로젝트 상황에 맞게 전공과 관심 키워드를 적어주세요.</p>
         </div>
 
         <form id="topic-form">
           <label class="field">
             <span>팀 이름 또는 프로젝트 이름</span>
-            <input id="teamName" type="text" placeholder="예: 융합탐구 3팀">
+            <input id="teamName" type="text" placeholder="예: 통합연구 3팀">
           </label>
 
           <label class="field">
-            <span>탐구 대상 또는 해결하고 싶은 대상</span>
-            <input id="target" type="text" placeholder="예: 청소년, 노인, 지역 주민, 학교 이용자">
+            <span>연구 대상 또는 해결하고 싶은 대상</span>
+            <input id="target" type="text" placeholder="예: 청소년, 지역 주민, 학교 이용자">
           </label>
 
           <label class="field">
@@ -44,7 +44,7 @@
           </label>
 
           <label class="field">
-            <span>활용 기술 또는 방법</span>
+            <span>사용 기술 또는 방법</span>
             <input id="technology" type="text" placeholder="예: AI, 설문조사, 데이터 분석, 3D 모델링">
           </label>
 
@@ -66,18 +66,18 @@
       <section class="panel result-panel">
         <div class="section-title">
           <h2>추천 결과</h2>
-          <p>전공 조합을 바탕으로 학생부용 탐구 활동 문장을 구성해드립니다.</p>
+          <p>전공 조합을 바탕으로 학생부에 활용할 수 있는 연구 활동 문장까지 구성해드립니다.</p>
         </div>
 
-          <div id="empty-state" class="empty-state">
-          <p>왼쪽 정보를 입력하면 여기에 탐구 주제가 생성됩니다.</p>
+        <div id="empty-state" class="empty-state">
+          <p>왼쪽 정보를 입력하면 여기에서 추천 연구 주제가 생성됩니다.</p>
         </div>
 
         <p id="status-message" class="status-message hidden"></p>
 
         <div id="result" class="result hidden">
           <article class="result-card highlight">
-            <p class="card-label">추천 탐구 주제</p>
+            <p class="card-label">추천 연구 주제</p>
             <h3 id="topic-title"></h3>
             <p id="topic-summary" class="summary"></p>
           </article>
@@ -89,7 +89,7 @@
 
           <article class="result-card grid-two">
             <div>
-              <p class="card-label">핵심 탐구 질문</p>
+              <p class="card-label">탐구 질문</p>
               <ul id="questions"></ul>
             </div>
             <div>
@@ -99,9 +99,14 @@
           </article>
 
           <article class="result-card">
-            <p class="card-label">AI에게 바로 요청할 수 있는 프롬프트</p>
+            <p class="card-label">AI에 바로 요청할 수 있는 프롬프트</p>
             <textarea id="ai-prompt" readonly></textarea>
-            <button id="copy-prompt" class="secondary-button" type="button">프롬프트 복사</button>
+            <div class="result-actions">
+              <button id="copy-prompt" class="secondary-button" type="button">프롬프트 복사</button>
+              <button id="download-document" class="secondary-button" type="button">일반 문서</button>
+              <button id="download-school-document" class="secondary-button" type="button">학교 제출용 양식</button>
+              <button id="save-pdf" class="secondary-button" type="button">PDF 저장</button>
+            </div>
           </article>
         </div>
       </section>

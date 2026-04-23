@@ -3,6 +3,9 @@ const addMajorButton = document.getElementById("add-major");
 const form = document.getElementById("topic-form");
 const fillExampleButton = document.getElementById("fill-example");
 const copyPromptButton = document.getElementById("copy-prompt");
+const downloadDocumentButton = document.getElementById("download-document");
+const downloadSchoolDocumentButton = document.getElementById("download-school-document");
+const savePdfButton = document.getElementById("save-pdf");
 
 const emptyState = document.getElementById("empty-state");
 const resultSection = document.getElementById("result");
@@ -23,6 +26,9 @@ const output = {
   activities: document.getElementById("activities"),
   aiPrompt: document.getElementById("ai-prompt")
 };
+
+let latestPayload = null;
+let latestRecommendation = null;
 
 const majorDomainMap = [
   { keywords: ["컴퓨터", "소프트웨어", "인공지능", "ai", "데이터", "정보"], domain: "디지털 기술", role: "AI 모델 설계와 데이터 처리" },
@@ -259,7 +265,488 @@ function renderList(element, items) {
   });
 }
 
+function toDocumentRecommendation(recommendation) {
+  return {
+    title: recommendation?.title || recommendation?.topicTitle || "",
+    summary: recommendation?.summary || recommendation?.topicSummary || "",
+    recordText: recommendation?.recordText || "",
+    questions: Array.isArray(recommendation?.questions) ? recommendation.questions : [],
+    activities: Array.isArray(recommendation?.activities) ? recommendation.activities : [],
+    aiPrompt: recommendation?.aiPrompt || ""
+  };
+}
+
+function rememberRecommendation(payload, recommendation) {
+  latestPayload = {
+    teamName: payload?.teamName || "",
+    target: payload?.target || "",
+    problem: payload?.problem || "",
+    technology: payload?.technology || "",
+    majors: Array.isArray(payload?.majors) ? [...payload.majors] : []
+  };
+
+  latestRecommendation = toDocumentRecommendation(recommendation);
+}
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;");
+}
+
+function buildDocumentRows(payload, generatedAt = new Date().toLocaleString("ko-KR")) {
+  const rows = [
+    ["생성 시각", generatedAt],
+    ["팀 이름", payload?.teamName || "-"],
+    ["연구 대상", payload?.target || "-"],
+    ["관심 문제", payload?.problem || "-"],
+    ["사용 기술/방법", payload?.technology || "-"],
+    ["희망 전공", payload?.majors?.length ? payload.majors.join(", ") : "-"]
+  ];
+
+  return rows
+    .map(([label, value]) => `
+      <tr>
+        <th>${escapeHtml(label)}</th>
+        <td>${escapeHtml(value)}</td>
+      </tr>
+    `)
+    .join("");
+}
+
+function buildDocumentList(items) {
+  return items
+    .map((item) => `<li>${escapeHtml(item)}</li>`)
+    .join("");
+}
+
+function buildPlainDocumentHtml(payload, recommendation) {
+  return `<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>${escapeHtml(recommendation.title || "추천 결과 문서")}</title>
+  <style>
+    body {
+      font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+      line-height: 1.65;
+      color: #1f2937;
+      margin: 40px;
+    }
+    h1, h2 {
+      margin: 0 0 12px;
+      color: #0f172a;
+    }
+    h1 {
+      font-size: 26px;
+      margin-bottom: 8px;
+    }
+    h2 {
+      font-size: 18px;
+      margin-top: 28px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #d1d5db;
+    }
+    p {
+      margin: 0 0 12px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+    }
+    th, td {
+      border: 1px solid #d1d5db;
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th {
+      width: 180px;
+      background: #f8fafc;
+    }
+    ul, ol {
+      margin: 8px 0 0 20px;
+      padding: 0;
+    }
+    li + li {
+      margin-top: 6px;
+    }
+    .prompt {
+      white-space: pre-wrap;
+      background: #f8fafc;
+      border: 1px solid #d1d5db;
+      border-radius: 10px;
+      padding: 16px;
+    }
+  </style>
+</head>
+<body>
+  <h1>${escapeHtml(recommendation.title || "추천 결과")}</h1>
+  <p>${escapeHtml(recommendation.summary || "")}</p>
+
+  <h2>입력 정보</h2>
+  <table>
+    <tbody>
+      ${buildDocumentRows(payload)}
+    </tbody>
+  </table>
+
+  <h2>학생부 활동 소개 문장</h2>
+  <p>${escapeHtml(recommendation.recordText || "")}</p>
+
+  <h2>탐구 질문</h2>
+  <ol>
+    ${buildDocumentList(recommendation.questions || [])}
+  </ol>
+
+  <h2>활동 구성</h2>
+  <ol>
+    ${buildDocumentList(recommendation.activities || [])}
+  </ol>
+
+  <h2>AI 확장 프롬프트</h2>
+  <div class="prompt">${escapeHtml(recommendation.aiPrompt || "")}</div>
+</body>
+</html>`;
+}
+
+function buildSchoolDocumentHtml(payload, recommendation, options = {}) {
+  const generatedAt = new Date().toLocaleString("ko-KR");
+  const autoPrintScript = options.autoPrint
+    ? `
+  <script>
+    window.addEventListener("load", () => {
+      setTimeout(() => {
+        window.focus();
+        window.print();
+      }, 250);
+    });
+    window.addEventListener("afterprint", () => {
+      setTimeout(() => window.close(), 150);
+    });
+  </script>`
+    : "";
+  const pageRule = options.forPrint
+    ? `
+    @page {
+      size: A4;
+      margin: 14mm;
+    }`
+    : "";
+
+  return `<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <title>${escapeHtml(recommendation.title || "학교 제출용 연구 활동 보고서")}</title>
+  <style>
+    ${pageRule}
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      font-family: "Malgun Gothic", "Apple SD Gothic Neo", sans-serif;
+      background: ${options.forPrint ? "#ffffff" : "#eef1f5"};
+      color: #111827;
+      line-height: 1.7;
+    }
+    .page {
+      width: ${options.forPrint ? "auto" : "210mm"};
+      min-height: ${options.forPrint ? "auto" : "297mm"};
+      margin: ${options.forPrint ? "0" : "24px auto"};
+      padding: ${options.forPrint ? "0" : "18mm 16mm"};
+      background: #ffffff;
+      box-shadow: ${options.forPrint ? "none" : "0 18px 48px rgba(15, 23, 42, 0.12)"};
+      border: 1px solid #111827;
+    }
+    .report-head {
+      text-align: center;
+      border-bottom: 2px solid #111827;
+      padding-bottom: 14px;
+      margin-bottom: 18px;
+    }
+    .report-head .badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border: 1px solid #111827;
+      font-size: 12px;
+      letter-spacing: 0.08em;
+      margin-bottom: 10px;
+    }
+    .report-head h1 {
+      margin: 0;
+      font-size: 24px;
+      letter-spacing: 0.03em;
+    }
+    .report-head p {
+      margin: 8px 0 0;
+      color: #374151;
+      font-size: 14px;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .info-table th,
+    .info-table td {
+      border: 1px solid #111827;
+      padding: 9px 10px;
+      font-size: 14px;
+      vertical-align: top;
+    }
+    .info-table th {
+      width: 22%;
+      background: #f3f4f6;
+      text-align: left;
+    }
+    .section {
+      margin-top: 16px;
+      border: 1px solid #111827;
+    }
+    .section-title {
+      margin: 0;
+      padding: 8px 12px;
+      font-size: 16px;
+      background: #f3f4f6;
+      border-bottom: 1px solid #111827;
+    }
+    .section-body {
+      padding: 12px;
+      font-size: 14px;
+    }
+    .section-body p {
+      margin: 0;
+      white-space: pre-wrap;
+    }
+    ol {
+      margin: 0;
+      padding-left: 20px;
+    }
+    li + li {
+      margin-top: 6px;
+    }
+    .summary-box {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 16px;
+    }
+    .summary-card {
+      border: 1px solid #111827;
+      padding: 10px 12px;
+      min-height: 82px;
+    }
+    .summary-card strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 13px;
+    }
+    .prompt-box {
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .sign-row {
+      display: flex;
+      justify-content: flex-end;
+      gap: 24px;
+      margin-top: 24px;
+      font-size: 14px;
+    }
+    .sign-cell {
+      min-width: 160px;
+      padding-top: 16px;
+      border-top: 1px solid #111827;
+      text-align: center;
+    }
+    @media print {
+      body {
+        background: #ffffff;
+      }
+      .page {
+        margin: 0;
+        padding: 0;
+        border: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="report-head">
+      <div class="badge">학교 제출용 정리본</div>
+      <h1>연구 활동 보고서</h1>
+      <p>${escapeHtml(recommendation.title || "추천 연구 주제")}</p>
+    </header>
+
+    <table class="info-table">
+      <tbody>
+        ${buildDocumentRows(payload, generatedAt)}
+      </tbody>
+    </table>
+
+    <div class="summary-box">
+      <div class="summary-card">
+        <strong>연구 주제</strong>
+        <div>${escapeHtml(recommendation.title || "-")}</div>
+      </div>
+      <div class="summary-card">
+        <strong>주제 요약</strong>
+        <div>${escapeHtml(recommendation.summary || "-")}</div>
+      </div>
+    </div>
+
+    <section class="section">
+      <h2 class="section-title">1. 학생부 기재용 활동 문장</h2>
+      <div class="section-body">
+        <p>${escapeHtml(recommendation.recordText || "-")}</p>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2 class="section-title">2. 핵심 탐구 질문</h2>
+      <div class="section-body">
+        <ol>
+          ${buildDocumentList(recommendation.questions || [])}
+        </ol>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2 class="section-title">3. 활동 계획 및 수행 내용</h2>
+      <div class="section-body">
+        <ol>
+          ${buildDocumentList(recommendation.activities || [])}
+        </ol>
+      </div>
+    </section>
+
+    <section class="section">
+      <h2 class="section-title">4. AI 확장 프롬프트</h2>
+      <div class="section-body prompt-box">${escapeHtml(recommendation.aiPrompt || "-")}</div>
+    </section>
+
+    <div class="sign-row">
+      <div class="sign-cell">작성자</div>
+      <div class="sign-cell">확인</div>
+    </div>
+  </div>
+  ${autoPrintScript}
+</body>
+</html>`;
+}
+
+function buildExportHtml(mode, payload, recommendation, options = {}) {
+  if (mode === "school") {
+    return buildSchoolDocumentHtml(payload, recommendation, options);
+  }
+
+  return buildPlainDocumentHtml(payload, recommendation);
+}
+
+function buildDocumentBaseName(title) {
+  const safeTitle = String(title || "recommendation")
+    .replace(/[<>:\"/\\|?*\u0000-\u001F]/g, " ")
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/-+/g, "-")
+    .slice(0, 50);
+  const dateStamp = new Date().toISOString().slice(0, 10);
+
+  return `${dateStamp}-${safeTitle || "recommendation"}`;
+}
+
+function downloadBlobFile(contents, type, fileName) {
+  const blob = new Blob(contents, { type });
+  const fileUrl = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = fileUrl;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+
+  setTimeout(() => {
+    URL.revokeObjectURL(fileUrl);
+  }, 0);
+}
+
+function ensureRecommendationExists() {
+  if (latestRecommendation && latestRecommendation.title) {
+    return true;
+  }
+
+  setStatus("먼저 추천 결과를 생성한 뒤 내보내기를 사용해 주세요.", true);
+  return false;
+}
+
+function downloadRecommendationDocument(mode = "plain") {
+  if (!ensureRecommendationExists()) {
+    return;
+  }
+
+  const documentHtml = buildExportHtml(mode, latestPayload, latestRecommendation);
+  const suffix = mode === "school" ? "school-form" : "report";
+  const fileName = `${buildDocumentBaseName(latestRecommendation.title)}-${suffix}.doc`;
+
+  downloadBlobFile(
+    ["\ufeff", documentHtml],
+    "application/msword;charset=utf-8",
+    fileName
+  );
+
+  setStatus(
+    mode === "school"
+      ? "학교 제출용 양식을 문서로 다운로드했습니다."
+      : "추천 결과 문서를 다운로드했습니다."
+  );
+}
+
+function openPrintWindow(documentHtml) {
+  const printWindow = window.open("", "_blank", "noopener,noreferrer,width=1024,height=1440");
+
+  if (!printWindow) {
+    setStatus("팝업이 차단되어 PDF 저장 창을 열지 못했습니다. 팝업을 허용한 뒤 다시 시도해 주세요.", true);
+    return false;
+  }
+
+  printWindow.document.open();
+  printWindow.document.write(documentHtml);
+  printWindow.document.close();
+  return true;
+}
+
+function saveRecommendationPdf() {
+  if (!ensureRecommendationExists()) {
+    return;
+  }
+
+  const pdfHtml = buildExportHtml("school", latestPayload, latestRecommendation, {
+    autoPrint: true,
+    forPrint: true
+  });
+
+  if (openPrintWindow(pdfHtml)) {
+    setStatus("PDF 저장용 인쇄 창을 열었습니다. 프린터를 'PDF로 저장'으로 선택하면 됩니다.");
+  }
+}
+
 function renderRecommendation(recommendation) {
+  rememberRecommendation(
+    {
+      teamName: fields.teamName.value.trim(),
+      target: fields.target.value.trim(),
+      problem: fields.problem.value.trim(),
+      technology: fields.technology.value.trim(),
+      majors: getMajors()
+    },
+    recommendation
+  );
+
   output.topicTitle.textContent = recommendation.title;
   output.topicSummary.textContent = recommendation.summary;
   output.recordText.textContent = recommendation.recordText;
@@ -273,6 +760,17 @@ function renderRecommendation(recommendation) {
 }
 
 function renderApiRecommendation(recommendation) {
+  rememberRecommendation(
+    {
+      teamName: fields.teamName.value.trim(),
+      target: fields.target.value.trim(),
+      problem: fields.problem.value.trim(),
+      technology: fields.technology.value.trim(),
+      majors: getMajors()
+    },
+    recommendation
+  );
+
   output.topicTitle.textContent = recommendation.topicTitle;
   output.topicSummary.textContent = recommendation.topicSummary;
   output.recordText.textContent = recommendation.recordText;
@@ -368,6 +866,18 @@ form.addEventListener("submit", async (event) => {
     submitButton.disabled = false;
     submitButton.textContent = "주제 추천받기";
   }
+});
+
+downloadDocumentButton.addEventListener("click", () => {
+  downloadRecommendationDocument();
+});
+
+downloadSchoolDocumentButton.addEventListener("click", () => {
+  downloadRecommendationDocument("school");
+});
+
+savePdfButton.addEventListener("click", () => {
+  saveRecommendationPdf();
 });
 
 copyPromptButton.addEventListener("click", async () => {
