@@ -12,43 +12,77 @@
 <body>
   <div class="page-shell">
     <header class="hero">
-      <p class="eyebrow">학생부 종합형 추천 도구</p>
-      <h1>여러 전공을 연결한<br>연구 활동 주제를 추천해드려요</h1>
-      <p class="hero-copy">
-        팀원들의 희망 전공과 해결하고 싶은 문제를 입력하면, 전공 간 공통 지점을 찾아
-        학생부와 포트폴리오에 활용하기 좋은 통합형 연구 주제를 추천합니다.
-      </p>
+      <div class="hero-grid">
+        <div class="hero-copy-block">
+          <p class="eyebrow">학생부 종합형 추천 도구</p>
+          <h1>여러 전공을 연결한<br>연구 활동 주제를 추천해드려요</h1>
+          <p class="hero-copy">
+            팀원들의 희망 전공과 해결하고 싶은 문제를 입력하면, 전공 간 공통 지점을 찾아 학생부와 포트폴리오에
+            활용하기 좋은 통합형 연구 주제를 추천합니다.
+          </p>
+
+          <div class="hero-highlights" aria-label="서비스 핵심 기능">
+            <article class="highlight-chip">
+              <img src="assets/icons/connect.png" alt="" class="chip-icon">
+              <div>
+                <strong>전공 연결</strong>
+                <span>관점이 다른 전공도 공통 주제로 묶어냅니다.</span>
+              </div>
+            </article>
+
+            <article class="highlight-chip">
+              <img src="assets/icons/topic.png" alt="" class="chip-icon">
+              <div>
+                <strong>주제 추천</strong>
+                <span>학생부에 적기 좋은 연구 주제를 구체화합니다.</span>
+              </div>
+            </article>
+
+            <article class="highlight-chip">
+              <img src="assets/icons/portfolio.png" alt="" class="chip-icon">
+              <div>
+                <strong>기록 확장</strong>
+                <span>활동 문장과 포트폴리오 흐름까지 함께 정리합니다.</span>
+              </div>
+            </article>
+          </div>
+        </div>
+
+        <div class="hero-art" aria-hidden="true">
+          <img src="assets/icons/hero-main.png" alt="" class="hero-art-image">
+        </div>
+      </div>
     </header>
 
     <main class="layout">
       <section class="panel form-panel">
-        <div class="section-title">
+        <div class="section-title section-title-form">
           <h2>입력 정보</h2>
           <p>우리 프로젝트 상황에 맞게 전공과 관심 키워드를 적어주세요.</p>
         </div>
 
         <form id="topic-form">
-          <label class="field">
+          <label class="field field-team">
             <span>팀 이름 또는 프로젝트 이름</span>
             <input id="teamName" type="text" placeholder="예: 통합연구 3팀">
           </label>
 
-          <label class="field">
+          <label class="field field-target">
             <span>연구 대상 또는 해결하고 싶은 대상</span>
             <input id="target" type="text" placeholder="예: 청소년, 지역 주민, 학교 이용자">
           </label>
 
-          <label class="field">
+          <label class="field field-problem">
             <span>관심 문제</span>
-            <input id="problem" type="text" placeholder="예: 심리적 안정감, 에너지 절약, 학습 몰입도 향상">
+            <input id="problem" type="text" placeholder="예: 분리수거 인식 부족, 학습 몰입도 저하">
           </label>
 
-          <label class="field">
+          <label class="field field-analysis">
             <span>사용 기술 또는 방법</span>
             <input id="technology" type="text" placeholder="예: AI, 설문조사, 데이터 분석, 3D 모델링">
           </label>
 
-          <div class="field">
+          <div class="field field-majors">
             <div class="field-head">
               <span>희망 전공</span>
               <button id="add-major" class="ghost-button" type="button">전공 추가</button>
@@ -64,42 +98,59 @@
       </section>
 
       <section class="panel result-panel">
-        <div class="section-title">
+        <div class="section-title section-title-result">
           <h2>추천 결과</h2>
           <p>전공 조합을 바탕으로 학생부에 활용할 수 있는 연구 활동 문장까지 구성해드립니다.</p>
         </div>
 
         <div id="empty-state" class="empty-state">
-          <p>왼쪽 정보를 입력하면 여기에서 추천 연구 주제가 생성됩니다.</p>
+          <div class="empty-state-visual">
+            <img src="assets/icons/hero-main.png" alt="" class="empty-state-icon">
+          </div>
+          <p>왼쪽 정보를 입력하면 여기에서 추천 연구 주제와 활동 설계가 함께 생성됩니다.</p>
+          <div class="empty-state-tags" aria-hidden="true">
+            <span class="empty-state-tag">
+              <img src="assets/icons/connect.png" alt="">
+              전공 연결
+            </span>
+            <span class="empty-state-tag">
+              <img src="assets/icons/activity.png" alt="">
+              연구 활동
+            </span>
+            <span class="empty-state-tag">
+              <img src="assets/icons/magic.png" alt="">
+              추천 생성
+            </span>
+          </div>
         </div>
 
         <p id="status-message" class="status-message hidden"></p>
 
         <div id="result" class="result hidden">
           <article class="result-card highlight">
-            <p class="card-label">추천 연구 주제</p>
+            <p class="card-label label-topic">추천 연구 주제</p>
             <h3 id="topic-title"></h3>
             <p id="topic-summary" class="summary"></p>
           </article>
 
           <article class="result-card">
-            <p class="card-label">학생부 활동 소개 문장</p>
+            <p class="card-label label-record">학생부 활동 소개 문장</p>
             <p id="record-text"></p>
           </article>
 
           <article class="result-card grid-two">
             <div>
-              <p class="card-label">탐구 질문</p>
+              <p class="card-label label-questions">탐구 질문</p>
               <ul id="questions"></ul>
             </div>
             <div>
-              <p class="card-label">활동 구성</p>
+              <p class="card-label label-activities">활동 구성</p>
               <ul id="activities"></ul>
             </div>
           </article>
 
           <article class="result-card">
-            <p class="card-label">AI에 바로 요청할 수 있는 프롬프트</p>
+            <p class="card-label label-prompt">AI에 바로 요청할 수 있는 프롬프트</p>
             <textarea id="ai-prompt" readonly></textarea>
             <div class="result-actions">
               <button id="copy-prompt" class="secondary-button" type="button">프롬프트 복사</button>

@@ -12,3 +12,9 @@
 - Deploy trigger: push to main or run `railway up`
 - Deploy status: poll `/health` and verify `/api`
 - Health check: `/health`
+
+### Default working agreement
+- Unless the user explicitly says not to deploy, treat code changes as incomplete until the latest version is applied to the live website.
+- Preferred finish sequence for code changes: local verification -> deploy to production -> confirm `/health` is healthy.
+- If Railway CLI is unavailable, use the repo's GitHub-to-Railway auto-deploy path by pushing the updated code to `main`.
+- If a change is clearly risky for production, pause briefly and confirm before pushing live.

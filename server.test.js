@@ -266,3 +266,17 @@ test("health endpoint reports deployment readiness", async (t) => {
   assert.equal(body.geminiConfigured, true);
   assert.equal(body.publicApiConfigured, true);
 });
+
+test("static assets are served with image content types", async (t) => {
+  const server = createServer();
+
+  t.after(async () => {
+    await shutdownServer(server);
+  });
+
+  const baseUrl = await listenOnRandomPort(server);
+  const response = await fetch(`${baseUrl}/assets/icons/topic.png`);
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("content-type"), "image/png");
+});
