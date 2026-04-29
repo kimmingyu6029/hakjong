@@ -325,6 +325,11 @@ textarea::placeholder {
   color: rgba(232, 224, 213, 0.5);
 }
 
+.field input[aria-invalid="true"] {
+  border-color: #d17b6d;
+  background: rgba(126, 33, 22, 0.12);
+}
+
 .field-head {
   display: flex;
   align-items: center;
@@ -481,6 +486,25 @@ textarea::placeholder {
   margin-top: 22px;
   display: grid;
   gap: 16px;
+}
+
+.result-source {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--heading);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.result-source.is-fallback {
+  border-color: rgba(209, 123, 109, 0.45);
+  background: rgba(126, 33, 22, 0.12);
+  color: #ffd8d1;
 }
 
 .result-card {

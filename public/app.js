@@ -9,6 +9,7 @@ const savePdfButton = document.getElementById("save-pdf");
 
 const emptyState = document.getElementById("empty-state");
 const resultSection = document.getElementById("result");
+const resultSource = document.getElementById("result-source");
 const statusMessage = document.getElementById("status-message");
 
 const fields = {
@@ -29,6 +30,15 @@ const output = {
 
 let latestPayload = null;
 let latestRecommendation = null;
+
+const FIELD_LIMITS = {
+  teamName: 80,
+  target: 120,
+  problem: 160,
+  technology: 160,
+  major: 60,
+  maxMajors: 6
+};
 
 const majorDomainMap = [
   { keywords: ["컴퓨터", "소프트웨어", "인공지능", "ai", "데이터", "정보"], domain: "디지털 기술", role: "AI 모델 설계와 데이터 처리" },
@@ -116,6 +126,7 @@ function createMajorInput(value = "") {
   const input = document.createElement("input");
   input.type = "text";
   input.className = "major-input";
+  input.maxLength = FIELD_LIMITS.major;
   input.placeholder = "예: 컴퓨터공학과";
   input.value = value;
 
@@ -134,6 +145,59 @@ function createMajorInput(value = "") {
 
   row.append(input, removeButton);
   majorsList.appendChild(row);
+}
+
+function markFieldValidity(element, isValid) {
+  if (!element) {
+    return;
+  }
+
+  element.setAttribute("aria-invalid", isValid ? "false" : "true");
+}
+
+function resetFieldValidity() {
+  Object.values(fields).forEach((field) => {
+    markFieldValidity(field, true);
+  });
+
+  document.querySelectorAll(".major-input").forEach((input) => {
+    markFieldValidity(input, true);
+  });
+}
+
+function validateClientPayload(payload) {
+  resetFieldValidity();
+
+  const requiredFields = [
+    ["target", "연구 대상 또는 해결하고 싶은 대상을 입력해 주세요."],
+    ["problem", "관심 문제를 입력해 주세요."],
+    ["technology", "사용 기술 또는 방법을 입력해 주세요."]
+  ];
+
+  for (const [key, message] of requiredFields) {
+    if (!payload[key]) {
+      markFieldValidity(fields[key], false);
+      fields[key].focus();
+      return { isValid: false, message };
+    }
+  }
+
+  if (payload.majors.length === 0) {
+    createMajorInput();
+    const firstMajor = document.querySelector(".major-input");
+    markFieldValidity(firstMajor, false);
+    firstMajor.focus();
+    return { isValid: false, message: "희망 전공을 하나 이상 입력해 주세요." };
+  }
+
+  if (payload.majors.length > FIELD_LIMITS.maxMajors) {
+    const overflowMajor = document.querySelectorAll(".major-input")[FIELD_LIMITS.maxMajors] || document.querySelector(".major-input");
+    markFieldValidity(overflowMajor, false);
+    overflowMajor.focus();
+    return { isValid: false, message: `희망 전공은 최대 ${FIELD_LIMITS.maxMajors}개까지 입력할 수 있어요.` };
+  }
+
+  return { isValid: true };
 }
 
 function getMajors() {
@@ -735,7 +799,20 @@ function saveRecommendationPdf() {
   }
 }
 
-function renderRecommendation(recommendation) {
+function setResultSource(message, isFallback = false) {
+  if (!message) {
+    resultSource.textContent = "";
+    resultSource.classList.add("hidden");
+    resultSource.classList.remove("is-fallback");
+    return;
+  }
+
+  resultSource.textContent = message;
+  resultSource.classList.remove("hidden");
+  resultSource.classList.toggle("is-fallback", isFallback);
+}
+
+function renderRecommendation(recommendation, { isFallback = false } = {}) {
   rememberRecommendation(
     {
       teamName: fields.teamName.value.trim(),
@@ -755,32 +832,23 @@ function renderRecommendation(recommendation) {
   renderList(output.questions, recommendation.questions);
   renderList(output.activities, recommendation.activities);
 
+  setResultSource(
+    isFallback ? "기본 추천 결과, Gemini 호출 실패 시 생성됨" : "AI 생성 결과, Gemini 기반 맞춤 추천",
+    isFallback
+  );
   emptyState.classList.add("hidden");
   resultSection.classList.remove("hidden");
 }
 
 function renderApiRecommendation(recommendation) {
-  rememberRecommendation(
-    {
-      teamName: fields.teamName.value.trim(),
-      target: fields.target.value.trim(),
-      problem: fields.problem.value.trim(),
-      technology: fields.technology.value.trim(),
-      majors: getMajors()
-    },
-    recommendation
-  );
-
-  output.topicTitle.textContent = recommendation.topicTitle;
-  output.topicSummary.textContent = recommendation.topicSummary;
-  output.recordText.textContent = recommendation.recordText;
-  output.aiPrompt.value = recommendation.aiPrompt;
-
-  renderList(output.questions, recommendation.questions);
-  renderList(output.activities, recommendation.activities);
-
-  emptyState.classList.add("hidden");
-  resultSection.classList.remove("hidden");
+  renderRecommendation({
+    title: recommendation.topicTitle,
+    summary: recommendation.topicSummary,
+    recordText: recommendation.recordText,
+    questions: recommendation.questions,
+    activities: recommendation.activities,
+    aiPrompt: recommendation.aiPrompt
+  });
 }
 
 function setStatus(message, isError = false) {
@@ -816,9 +884,17 @@ async function fetchRecommendation(payload) {
   return result;
 }
 
-addMajorButton.addEventListener("click", () => createMajorInput());
+addMajorButton.addEventListener("click", () => {
+  if (document.querySelectorAll(".major-input").length >= FIELD_LIMITS.maxMajors) {
+    setStatus(`희망 전공은 최대 ${FIELD_LIMITS.maxMajors}개까지 추가할 수 있어요.`, true);
+    return;
+  }
+
+  createMajorInput();
+});
 
 fillExampleButton.addEventListener("click", () => {
+  resetFieldValidity();
   fields.teamName.value = "융합탐구 3팀";
   fields.target.value = "고객과 공간 이용자";
   fields.problem.value = "심리적 안정감";
@@ -833,21 +909,19 @@ fillExampleButton.addEventListener("click", () => {
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
 
-  const majors = getMajors();
-
-  if (majors.length === 0) {
-    createMajorInput();
-    document.querySelector(".major-input").focus();
-    return;
-  }
-
   const payload = {
     teamName: fields.teamName.value.trim(),
     target: fields.target.value.trim(),
     problem: fields.problem.value.trim(),
     technology: fields.technology.value.trim(),
-    majors
+    majors: getMajors()
   };
+  const validation = validateClientPayload(payload);
+
+  if (!validation.isValid) {
+    setStatus(validation.message, true);
+    return;
+  }
 
   const submitButton = form.querySelector(".primary-button");
   submitButton.disabled = true;
@@ -860,7 +934,7 @@ form.addEventListener("submit", async (event) => {
     setStatus("Gemini API를 통해 맞춤 추천 결과를 생성했습니다.");
   } catch (error) {
     const fallbackRecommendation = buildRecommendation(payload);
-    renderRecommendation(fallbackRecommendation);
+    renderRecommendation(fallbackRecommendation, { isFallback: true });
     setStatus(`Gemini 호출에 실패해 기본 추천 로직으로 결과를 생성했습니다. 사유: ${error.message}`, true);
   } finally {
     submitButton.disabled = false;

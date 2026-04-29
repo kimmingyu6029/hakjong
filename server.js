@@ -4,7 +4,13 @@ const path = require("path");
 const { URL } = require("url");
 
 const ROOT = __dirname;
-const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent";
+const PUBLIC_DIR = path.join(ROOT, "public");
+const GEMINI_API_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models";
+const DEFAULT_GEMINI_MODEL_NAMES = [
+  "gemini-2.5-flash",
+  "gemini-2.5-flash-lite",
+  "gemini-flash-lite-latest"
+];
 const GEMINI_RETRYABLE_STATUS_CODES = new Set([429, 500, 502, 503, 504]);
 const GEMINI_MAX_ATTEMPTS = 3;
 const GEMINI_RETRY_BASE_DELAY_MS = 400;
@@ -32,6 +38,14 @@ const MIME_TYPES = {
 };
 
 const rateLimitStore = new Map();
+
+class HttpError extends Error {
+  constructor(statusCode, message) {
+    super(message);
+    this.name = "HttpError";
+    this.statusCode = statusCode;
+  }
+}
 
 function sendJson(response, statusCode, payload, headers = {}) {
   response.writeHead(statusCode, {
@@ -118,7 +132,7 @@ function readBody(request) {
       raw += chunk;
 
       if (raw.length > MAX_BODY_BYTES) {
-        reject(new Error("Request body too large"));
+        reject(new HttpError(413, "Request body too large"));
       }
     });
 
@@ -126,7 +140,7 @@ function readBody(request) {
       try {
         resolve(raw ? JSON.parse(raw) : {});
       } catch {
-        reject(new Error("Invalid JSON body"));
+        reject(new HttpError(400, "Invalid JSON body"));
       }
     });
 
@@ -134,12 +148,126 @@ function readBody(request) {
   });
 }
 
-function sanitizePathname(pathname) {
+function sanitizeStaticPathname(pathname) {
   const decoded = decodeURIComponent(pathname).replace(/\\/g, "/");
   const safePath = decoded === "/" ? "/index.html" : decoded;
-  const normalized = path.posix.normalize(safePath).replace(/^(\.\.\/)+/, "");
+  const normalized = path.posix.normalize(safePath);
   const relativePath = normalized.replace(/^\/+/, "");
-  return path.join(ROOT, relativePath);
+  const segments = relativePath.split("/").filter(Boolean);
+
+  if (segments.some((segment) => segment.startsWith("."))) {
+    return null;
+  }
+
+  const filePath = path.join(PUBLIC_DIR, relativePath);
+  return filePath.startsWith(PUBLIC_DIR) ? filePath : null;
+}
+
+function normalizeOptionalString(value, fieldName, { maxLength }) {
+  if (value == null || value === "") {
+    return "";
+  }
+
+  if (typeof value !== "string") {
+    throw new HttpError(422, `${fieldName} must be a string.`);
+  }
+
+  const trimmed = value.trim();
+
+  if (trimmed.length > maxLength) {
+    throw new HttpError(422, `${fieldName} must be ${maxLength} characters or fewer.`);
+  }
+
+  return trimmed;
+}
+
+function normalizeRequiredString(value, fieldName, { maxLength }) {
+  const normalized = normalizeOptionalString(value, fieldName, { maxLength });
+
+  if (!normalized) {
+    throw new HttpError(422, `${fieldName} is required.`);
+  }
+
+  return normalized;
+}
+
+function validateRecommendationInput(body) {
+  if (!body || typeof body !== "object" || Array.isArray(body)) {
+    throw new HttpError(422, "Request body must be a JSON object.");
+  }
+
+  if (!Array.isArray(body.majors)) {
+    throw new HttpError(422, "majors must be an array.");
+  }
+
+  const majors = body.majors
+    .map((major) => normalizeRequiredString(major, "Each major", { maxLength: 60 }))
+    .filter(Boolean);
+
+  if (majors.length === 0) {
+    throw new HttpError(422, "At least one major is required.");
+  }
+
+  if (majors.length > 6) {
+    throw new HttpError(422, "You can send up to 6 majors.");
+  }
+
+  return {
+    teamName: normalizeOptionalString(body.teamName, "teamName", { maxLength: 80 }),
+    target: normalizeRequiredString(body.target, "target", { maxLength: 120 }),
+    problem: normalizeRequiredString(body.problem, "problem", { maxLength: 160 }),
+    technology: normalizeRequiredString(body.technology, "technology", { maxLength: 160 }),
+    majors
+  };
+}
+
+function joinKoreanList(items) {
+  const cleanItems = items.filter(Boolean);
+
+  if (cleanItems.length === 0) {
+    return "";
+  }
+
+  if (cleanItems.length === 1) {
+    return cleanItems[0];
+  }
+
+  return `${cleanItems.slice(0, -1).join(", ")}와 ${cleanItems.at(-1)}`;
+}
+
+function buildFallbackRecommendation(data) {
+  const teamName = data.teamName || "프로젝트 팀";
+  const target = data.target || "학교 구성원";
+  const problem = data.problem || "생활 속 불편";
+  const technology = data.technology || "AI와 데이터 분석";
+  const majors = joinKoreanList(data.majors || []) || "여러 전공";
+
+  return {
+    topicTitle: `${target}의 ${problem} 개선을 위한 ${technology} 기반 ${majors} 융합 연구`,
+    topicSummary: `${teamName}은 ${target}이 겪는 ${problem}을 줄이기 위해 ${technology}를 활용하고, ${majors} 관점을 연결해 학교 현장에서 적용 가능한 결과물을 설계한다.`,
+    recordText: `${teamName}은 ${majors}의 관점을 바탕으로 ${target}의 ${problem} 문제를 정의하고, ${technology}를 활용한 해결 방안을 탐구하였다. 자료 수집, 분석 기준 설정, prototype 구상 과정을 통해 실제 학교 환경에 적용 가능한 융합형 연구 주제를 도출하였다.`,
+    questions: [
+      `${target}은 어떤 상황에서 ${problem}을 가장 크게 경험하는가?`,
+      `${majors}의 관점을 함께 적용하면 기존 해결 방식보다 어떤 장점을 만들 수 있는가?`,
+      `${technology}를 활용해 수집하거나 분석해야 할 핵심 데이터는 무엇인가?`,
+      `제안한 결과물이 ${target}의 만족도, 편의성, 효율성 중 어떤 지표를 개선하는지 어떻게 확인할 수 있는가?`
+    ],
+    activities: [
+      `${target}을 대상으로 설문, 인터뷰, 관찰을 진행해 ${problem}의 원인과 빈도를 정리하기`,
+      `${majors}별 역할을 나누어 문제 원인, 설계 기준, 평가 지표를 함께 정의하기`,
+      `${technology}를 활용한 prototype, 분석표, 추천 기준, 또는 시각화 자료 중 하나를 제작하기`,
+      `완성된 결과물을 사례에 적용해 개선 효과와 한계를 정리하고 발표 자료로 구성하기`
+    ],
+    aiPrompt: [
+      "다음 조건을 바탕으로 고등학생 생활기록부에 활용할 수 있는 융합 탐구 프로젝트를 구체화해줘.",
+      `팀명: ${teamName}`,
+      `대상: ${target}`,
+      `해결할 문제: ${problem}`,
+      `사용 기술/방법: ${technology}`,
+      `희망 전공: ${(data.majors || []).join(", ")}`,
+      "요구사항: 연구 주제 3개, 탐구 필요성, 활동 단계, 결과물 예시, 생활기록부 문장 예시를 포함해줘."
+    ].join("\n")
+  };
 }
 
 function buildPrompt(data) {
@@ -226,12 +354,33 @@ function formatGeminiError(status, errorText) {
   return `Gemini API error (${status}): ${message}`;
 }
 
+function getGeminiModelNames() {
+  const raw = process.env.GEMINI_MODELS || process.env.GEMINI_MODEL;
+
+  if (typeof raw !== "string" || !raw.trim()) {
+    return DEFAULT_GEMINI_MODEL_NAMES;
+  }
+
+  const modelNames = raw
+    .split(",")
+    .map((modelName) => modelName.trim())
+    .filter(Boolean);
+
+  return modelNames.length > 0 ? modelNames : DEFAULT_GEMINI_MODEL_NAMES;
+}
+
+function buildGeminiApiUrl(modelName) {
+  const normalizedModelName = modelName.replace(/^models\//, "");
+  return `${GEMINI_API_BASE_URL}/${normalizedModelName}:generateContent`;
+}
+
 async function createRecommendation(
   data,
   {
     fetchImpl = fetch,
     waitImpl = wait,
-    maxAttempts = GEMINI_MAX_ATTEMPTS
+    maxAttempts = GEMINI_MAX_ATTEMPTS,
+    modelNames = getGeminiModelNames()
   } = {}
 ) {
   if (!process.env.GEMINI_API_KEY) {
@@ -279,67 +428,94 @@ async function createRecommendation(
     }
   });
 
-  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
-    let response;
+  for (let modelIndex = 0; modelIndex < modelNames.length; modelIndex += 1) {
+    const modelName = modelNames[modelIndex];
+    const hasNextModel = modelIndex < modelNames.length - 1;
 
-    try {
-      response = await fetchImpl(GEMINI_API_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-goog-api-key": process.env.GEMINI_API_KEY
-        },
-        body: requestBody
-      });
-    } catch (error) {
-      if (attempt === maxAttempts) {
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      let response;
+
+      try {
+        response = await fetchImpl(buildGeminiApiUrl(modelName), {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-goog-api-key": process.env.GEMINI_API_KEY
+          },
+          body: requestBody
+        });
+      } catch (error) {
+        if (attempt < maxAttempts) {
+          await waitImpl(getGeminiRetryDelayMs(attempt));
+          continue;
+        }
+
+        if (hasNextModel) {
+          break;
+        }
+
         throw error;
       }
 
-      await waitImpl(getGeminiRetryDelayMs(attempt));
-      continue;
-    }
+      if (!response.ok) {
+        const errorText = await response.text();
+        const geminiError = new Error(formatGeminiError(response.status, errorText));
+        geminiError.geminiStatus = response.status;
+        geminiError.geminiModel = modelName;
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      const geminiError = new Error(formatGeminiError(response.status, errorText));
+        if (isRetryableGeminiStatus(response.status) && attempt < maxAttempts) {
+          await waitImpl(getGeminiRetryDelayMs(attempt));
+          continue;
+        }
 
-      if (!isRetryableGeminiStatus(response.status) || attempt === maxAttempts) {
+        if (isRetryableGeminiStatus(response.status) && hasNextModel) {
+          break;
+        }
+
         throw geminiError;
       }
 
-      await waitImpl(getGeminiRetryDelayMs(attempt));
-      continue;
-    }
+      const result = await response.json();
+      const content = result.candidates?.[0]?.content?.parts?.find((part) => typeof part.text === "string")?.text;
 
-    const result = await response.json();
-    const content = result.candidates?.[0]?.content?.parts?.find((part) => typeof part.text === "string")?.text;
+      if (!content) {
+        if (result.promptFeedback?.blockReason) {
+          throw new Error(`Gemini blocked the prompt: ${result.promptFeedback.blockReason}`);
+        }
 
-    if (!content) {
-      if (result.promptFeedback?.blockReason) {
-        throw new Error(`Gemini blocked the prompt: ${result.promptFeedback.blockReason}`);
+        throw new Error("Gemini API returned an empty response");
       }
 
-      throw new Error("Gemini API returned an empty response");
+      const parsed = JSON.parse(content);
+
+      if (
+        !parsed.topicTitle ||
+        !parsed.topicSummary ||
+        !parsed.recordText ||
+        !Array.isArray(parsed.questions) ||
+        !Array.isArray(parsed.activities) ||
+        !parsed.aiPrompt
+      ) {
+        throw new Error("Gemini API response did not match the expected format");
+      }
+
+      return parsed;
     }
-
-    const parsed = JSON.parse(content);
-
-    if (
-      !parsed.topicTitle ||
-      !parsed.topicSummary ||
-      !parsed.recordText ||
-      !Array.isArray(parsed.questions) ||
-      !Array.isArray(parsed.activities) ||
-      !parsed.aiPrompt
-    ) {
-      throw new Error("Gemini API response did not match the expected format");
-    }
-
-    return parsed;
   }
 
   throw new Error("Gemini API request failed after retries");
+}
+
+function shouldUseFallbackRecommendation(error) {
+  if (!error || error.message?.includes("GEMINI_API_KEY")) {
+    return false;
+  }
+
+  if (Number.isInteger(error.geminiStatus)) {
+    return isRetryableGeminiStatus(error.geminiStatus);
+  }
+
+  return true;
 }
 
 function getRequestBaseUrl(request) {
@@ -570,10 +746,10 @@ function buildApiDocs(request) {
 function serveStatic(request, response) {
   const host = request.headers.host || `localhost:${readPort()}`;
   const pathname = new URL(request.url, `http://${host}`).pathname;
-  const filePath = sanitizePathname(pathname);
+  const filePath = sanitizeStaticPathname(pathname);
 
-  if (!filePath.startsWith(ROOT)) {
-    sendJson(response, 403, { error: "Forbidden" });
+  if (!filePath) {
+    sendJson(response, 404, { error: "Not found" });
     return;
   }
 
@@ -627,11 +803,28 @@ async function handleRecommendationRequest(request, response, options = {}) {
     }
   }
 
+  let validatedBody;
+
   try {
     const body = await readBody(request);
-    const recommendation = await createRecommendation(body, options.dependencies);
+    validatedBody = validateRecommendationInput(body);
+    const recommendation = await createRecommendation(validatedBody, options.dependencies);
     sendJson(response, 200, recommendation, headers);
   } catch (error) {
+    if (error instanceof HttpError) {
+      sendJson(response, error.statusCode, { error: error.message }, headers);
+      return;
+    }
+
+    if (validatedBody && shouldUseFallbackRecommendation(error)) {
+      console.warn("Gemini recommendation failed; returning fallback recommendation.", error);
+      sendJson(response, 200, buildFallbackRecommendation(validatedBody), {
+        ...headers,
+        "X-Recommendation-Source": "fallback"
+      });
+      return;
+    }
+
     const statusCode = error.message.includes("GEMINI_API_KEY") ? 500 : 502;
     sendJson(response, statusCode, {
       error: error.message
@@ -782,16 +975,19 @@ module.exports = {
   applyRateLimit,
   authenticatePublicApiRequest,
   buildApiDocs,
+  buildFallbackRecommendation,
   createRecommendation,
   createRequestHandler,
   createServer,
   formatGeminiError,
   getGeminiRetryDelayMs,
+  getGeminiModelNames,
   getPublicCorsHeaders,
   isRetryableGeminiStatus,
   isSameOriginRequest,
   readHost,
   readPort,
+  validateRecommendationInput,
   shutdownServer,
   startServer
 };

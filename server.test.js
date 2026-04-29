@@ -5,9 +5,11 @@ const {
   APP_API_PATH,
   HEALTH_PATH,
   PUBLIC_API_PATH,
+  buildFallbackRecommendation,
   createRecommendation,
   createServer,
-  shutdownServer
+  shutdownServer,
+  validateRecommendationInput
 } = require("./server");
 
 function createErrorResponse(status, payload) {
@@ -142,6 +144,36 @@ test("createRecommendation retries a transient Gemini 503 response", async () =>
   assert.deepEqual(result, expected);
 });
 
+test("createRecommendation tries a lighter Gemini model after retryable model failures", async () => {
+  process.env.GEMINI_API_KEY = "test-api-key";
+
+  const urls = [];
+  const expected = getSampleRecommendation();
+
+  const result = await createRecommendation(getSamplePayload(), {
+    fetchImpl: async (url) => {
+      urls.push(url);
+
+      if (urls.length === 1) {
+        return createErrorResponse(503, {
+          error: {
+            message: "This model is currently experiencing high demand."
+          }
+        });
+      }
+
+      return createSuccessResponse(expected);
+    },
+    maxAttempts: 1,
+    modelNames: ["gemini-2.5-flash", "gemini-2.5-flash-lite"],
+    waitImpl: async () => {}
+  });
+
+  assert.match(urls[0], /gemini-2\.5-flash:generateContent$/);
+  assert.match(urls[1], /gemini-2\.5-flash-lite:generateContent$/);
+  assert.deepEqual(result, expected);
+});
+
 test("createRecommendation does not retry a non-retryable Gemini 400 response", async () => {
   process.env.GEMINI_API_KEY = "test-api-key";
 
@@ -253,6 +285,43 @@ test("public API accepts server-to-server requests with a valid API key", async 
   assert.equal(response.headers.get("x-ratelimit-limit"), "30");
 });
 
+test("website API returns a fallback recommendation when Gemini stays unavailable", async (t) => {
+  process.env.GEMINI_API_KEY = "test-api-key";
+
+  const server = createServer({
+    fetchImpl: async () => createErrorResponse(503, {
+      error: {
+        message: "This model is currently experiencing high demand."
+      }
+    }),
+    maxAttempts: 1,
+    modelNames: ["gemini-2.5-flash"],
+    waitImpl: async () => {}
+  });
+
+  t.after(async () => {
+    await shutdownServer(server);
+  });
+
+  const baseUrl = await listenOnRandomPort(server);
+
+  const response = await fetch(`${baseUrl}${APP_API_PATH}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(getSamplePayload())
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(response.headers.get("x-recommendation-source"), "fallback");
+
+  const body = await response.json();
+  assert.equal(body.questions.length, 4);
+  assert.equal(body.activities.length, 4);
+  assert.match(body.topicTitle, /students/);
+});
+
 test("same-origin website API rejects cross-origin browser requests", async (t) => {
   process.env.GEMINI_API_KEY = "test-api-key";
 
@@ -278,6 +347,64 @@ test("same-origin website API rejects cross-origin browser requests", async (t) 
   assert.equal(response.status, 403);
   const body = await response.json();
   assert.match(body.error, /Cross-origin browser access is not allowed/);
+});
+
+test("website API returns 422 for missing required fields", async (t) => {
+  process.env.GEMINI_API_KEY = "test-api-key";
+
+  const server = createServer({
+    fetchImpl: async () => createSuccessResponse(getSampleRecommendation())
+  });
+
+  t.after(async () => {
+    await shutdownServer(server);
+  });
+
+  const baseUrl = await listenOnRandomPort(server);
+
+  const response = await fetch(`${baseUrl}${APP_API_PATH}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      teamName: "Team One",
+      target: "",
+      problem: "stress in study spaces",
+      technology: "AI floor-plan generation",
+      majors: ["computer science"]
+    })
+  });
+
+  assert.equal(response.status, 422);
+  const body = await response.json();
+  assert.match(body.error, /target is required/);
+});
+
+test("website API returns 400 for invalid JSON", async (t) => {
+  process.env.GEMINI_API_KEY = "test-api-key";
+
+  const server = createServer({
+    fetchImpl: async () => createSuccessResponse(getSampleRecommendation())
+  });
+
+  t.after(async () => {
+    await shutdownServer(server);
+  });
+
+  const baseUrl = await listenOnRandomPort(server);
+
+  const response = await fetch(`${baseUrl}${APP_API_PATH}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: "{not-valid-json}"
+  });
+
+  assert.equal(response.status, 400);
+  const body = await response.json();
+  assert.match(body.error, /Invalid JSON body/);
 });
 
 test("health endpoint reports deployment readiness", async (t) => {
@@ -313,4 +440,46 @@ test("static assets are served with image content types", async (t) => {
 
   assert.equal(response.status, 200);
   assert.equal(response.headers.get("content-type"), "image/png");
+});
+
+test("private project files are not served as static assets", async (t) => {
+  const server = createServer();
+
+  t.after(async () => {
+    await shutdownServer(server);
+  });
+
+  const baseUrl = await listenOnRandomPort(server);
+  const response = await fetch(`${baseUrl}/README.md`);
+
+  assert.equal(response.status, 404);
+});
+
+test("validateRecommendationInput trims and normalizes valid payloads", () => {
+  const validated = validateRecommendationInput({
+    teamName: " Team One ",
+    target: " students ",
+    problem: " stress in study spaces ",
+    technology: " AI floor-plan generation ",
+    majors: [" computer science ", " architecture "]
+  });
+
+  assert.deepEqual(validated, {
+    teamName: "Team One",
+    target: "students",
+    problem: "stress in study spaces",
+    technology: "AI floor-plan generation",
+    majors: ["computer science", "architecture"]
+  });
+});
+
+test("buildFallbackRecommendation returns the public API response shape", () => {
+  const fallback = buildFallbackRecommendation(getSamplePayload());
+
+  assert.equal(typeof fallback.topicTitle, "string");
+  assert.equal(typeof fallback.topicSummary, "string");
+  assert.equal(typeof fallback.recordText, "string");
+  assert.equal(fallback.questions.length, 4);
+  assert.equal(fallback.activities.length, 4);
+  assert.equal(typeof fallback.aiPrompt, "string");
 });

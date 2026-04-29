@@ -42,7 +42,7 @@
               <img src="assets/icons/portfolio.png" alt="" class="chip-icon">
               <div>
                 <strong>기록 확장</strong>
-                <span>활동 문장과 포트폴리오 흐름까지 함께 정리합니다.</span>
+                <span>활동 문장과 포트폴리오용 자료까지 함께 정리합니다.</span>
               </div>
             </article>
           </div>
@@ -58,28 +58,28 @@
       <section class="panel form-panel">
         <div class="section-title section-title-form">
           <h2>입력 정보</h2>
-          <p>우리 프로젝트 상황에 맞게 전공과 관심 키워드를 적어주세요.</p>
+          <p>프로젝트 상황에 맞게 전공과 관심 키워드를 적어주세요.</p>
         </div>
 
-        <form id="topic-form">
+        <form id="topic-form" novalidate>
           <label class="field field-team">
             <span>팀 이름 또는 프로젝트 이름</span>
-            <input id="teamName" type="text" placeholder="예: 통합연구 3팀">
+            <input id="teamName" type="text" maxlength="80" placeholder="예: 통합연구 3팀">
           </label>
 
           <label class="field field-target">
             <span>연구 대상 또는 해결하고 싶은 대상</span>
-            <input id="target" type="text" placeholder="예: 청소년, 지역 주민, 학교 이용자">
+            <input id="target" type="text" required maxlength="120" placeholder="예: 청소년, 지역 주민, 학교 이용자">
           </label>
 
           <label class="field field-problem">
             <span>관심 문제</span>
-            <input id="problem" type="text" placeholder="예: 분리수거 인식 부족, 학습 몰입도 저하">
+            <input id="problem" type="text" required maxlength="160" placeholder="예: 분리수거 인식 부족, 학습 몰입도 저하">
           </label>
 
           <label class="field field-analysis">
             <span>사용 기술 또는 방법</span>
-            <input id="technology" type="text" placeholder="예: AI, 설문조사, 데이터 분석, 3D 모델링">
+            <input id="technology" type="text" required maxlength="160" placeholder="예: AI, 설문조사, 데이터 분석, 3D 모델링">
           </label>
 
           <div class="field field-majors">
@@ -124,9 +124,11 @@
           </div>
         </div>
 
-        <p id="status-message" class="status-message hidden"></p>
+        <p id="status-message" class="status-message hidden" aria-live="polite"></p>
 
         <div id="result" class="result hidden">
+          <div id="result-source" class="result-source hidden" aria-live="polite"></div>
+
           <article class="result-card highlight">
             <p class="card-label label-topic">추천 연구 주제</p>
             <h3 id="topic-title"></h3>
